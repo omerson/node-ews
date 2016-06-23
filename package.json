@@ -19,7 +19,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/omerson/node-ews"
+    "url": "git+https://github.com/omerson/node-ews.git"
   },
   "keywords": [
     "node",
