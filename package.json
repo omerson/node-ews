@@ -13,7 +13,7 @@
     "async": "^1.5.2",
     "lodash": "^4.0.1",
     "request": ">=2.9.0",
-    "soap-noendlessloop": "^0.15.0",
+    "soap-noendlessloop": "^0.15.3",
     "tmp": "0.0.28",
     "xml2js": "^0.4.16"
   },
