@@ -5,26 +5,45 @@
 npm install node-ews
 ```
 
+#### Updates in version 2.0.0
+
+- Removed xml2js dependancy and using XML parser built into soap library
+- Removed async dependancy and library now returns promises
+- Changed constructor setup
+- Added optional "options" to constructor that is passed to soap library
+- Host config now allows specifying http or https urls
+- Replaced customized ntlm library with httpntlm
+
+#### Updates in version 2.1.0
+
+- Added the ability to specify the directory where XSD and WSDL files are stored
+- Added authentication error handling
+- Added WSDL validation error handling
+- Added logic to determine if XSD and WDSL files have already been downloaded rather than attempting download on each run
+
 #### About
 A extension of node-soap with httpntlm to make queries to Microsoft's Exchange Web Service API work.
 
 ##### Features:
-- Assumes NTLM Authentication over HTTPs
-- Connects to configured EWS Host and downloads it's wsdl file so it might be concluded that this is "fairly" version agnostic
-- After downloading the wsdl file, the wrapper dynamically exposes all EWS SOAP functions
-- Attempts to standardize Microsoft's wsdl by modifying the file to include missing service name, port, and bindings
+- Assumes NTLM Authentication over HTTPs (basic auth not currently supported)
+- Connects to configured EWS Host and downloads it's WSDL file so it might be concluded that this is "fairly" version agnostic
+- After downloading the  WSDL file, the wrapper dynamically exposes all EWS SOAP functions
+- Attempts to standardize Microsoft's  WSDL by modifying the file to include missing service name, port, and bindings
+- This DOES NOT work with anything Microsoft Documents as using the EWS Managed API.
 
 #### Example 1: Get Exchange Distribution List Members Using ExpandDL
 ###### https://msdn.microsoft.com/EN-US/library/office/aa564755.aspx
 ```js
-var ews = require('node-ews');
+var EWS = require('node-ews');
 
 // exchange server connection info
 var username = 'myuser@domain.com';
 var password = 'mypassword';
-var host = 'ews.domain.com';
+var host = 'https://ews.domain.com';
 
-// exchange ews query on Public Distribution List by email
+// initialize node-ews
+var ews = new EWS(username, password, host);
+
 var ewsFunction = 'ExpandDL';
 var ewsArgs = {
   'Mailbox': {
@@ -32,77 +51,232 @@ var ewsArgs = {
   }
 };
 
-// ignore ssl verification (optional)
-ews.ignoreSSL = true;
+// query ews, print resulting JSON to console
+ews.run(ewsFunction, ewsArgs)
+  .then(result => {
+    console.log(JSON.stringify(result));
+  })
+  .catch(err => {
+    console.log(err.message);
+  });
 
-// setup authentication
-ews.auth(username, password, host);
+```
+
+#### Example 2: Setting OOO Using SetUserOofSettings
+###### https://msdn.microsoft.com/en-us/library/office/aa580294.aspx
+```js
+var EWS = require('node-ews');
+
+// exchange server connection info
+var username = 'myuser@domain.com';
+var password = 'mypassword';
+var host = 'https://ews.domain.com';
+
+// initialize node-ews
+var ews = new EWS(username, password, host);
+
+var ewsFunction = 'SetUserOofSettings';
+var ewsArgs = {
+  'Mailbox': {
+    'Address':'email@somedomain.com'
+  },
+  'UserOofSettings': {
+    'OofState':'Enabled',
+    'ExternalAudience':'All',
+    'Duration': {
+      'StartTime':'2016-08-22T00:00:00',
+      'EndTime':'2016-08-23T00:00:00'
+    },
+    'InternalReply': {
+      'Message':'I am out of office.  This is my internal reply.'
+    },
+    'ExternalReply': {
+      'Message':'I am out of office. This is my external reply.'
+    }
+  }
+};
 
 // query ews, print resulting JSON to console
-ews.run(ewsFunction, ewsArgs, function(err, result) {
-  if(!err) console.log(JSON.stringify(result));
-});
-````
+ews.run(ewsFunction, ewsArgs)
+  .then(result => {
+    console.log(JSON.stringify(result));
+  })
+  .catch(err => {
+    console.log(err.stack);
+  });
+```
 
-#### Custom Soap Headers
+#### Example 3: Getting OOO Using GetUserOofSettings
+###### https://msdn.microsoft.com/en-us/library/office/aa563465.aspx
 ```js
-ews.run('FindItem', {
-  body: {
-    attributes: {
-      Traversal: 'Shallow'
-    },
-    ItemShape: {
-      BaseShape: 'IdOnly',
-      AdditionalProperties: {
-        FieldURI: {
-          attributes: {
-            FieldURI: 'item:Subject'
-          }
-        }
-      }
-    },
-    CalendarView: {
-      attributes: {
-        MaxEntriesReturned: 10,
-        StartDate: '2016-01-01T00:00:00Z',
-        EndDate: '2016-12-31T00:00:00Z'
-      }
-    },
-    ParentFolderIds: {
-      DistinguishedFolderId: {
-        attributes: {
-          Id: 'calendar'
-        }
+var EWS = require('node-ews');
+
+// exchange server connection info
+var username = 'myuser@domain.com';
+var password = 'mypassword';
+var host = 'https://ews.domain.com';
+
+// initialize node-ews
+var ews = new EWS(username, password, host);
+
+var ewsFunction = 'GetUserOofSettings';
+var ewsArgs = {
+  'Mailbox': {
+    'Address':'email@somedomain.com'
+  }
+};
+
+// query ews, print resulting JSON to console
+ews.run(ewsFunction, ewsArgs)
+  .then(result => {
+    console.log(JSON.stringify(result));
+  })
+  .catch(err => {
+    console.log(err.stack);
+  });
+```
+
+
+### Advanced Options
+
+#### Disable SSL verification:
+
+To disable SSL authentication modify the above examples with the following:
+
+```js
+var options = {
+ rejectUnauthorized: false,
+ strictSSL: false
+};
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
+var ews = new EWS(username, password, host, options);
+```
+
+#### Specify Temp Directory:
+
+By default, node-ews creates a temp directory to store the xsd and wsdl file retrieved from the Exchange Web Service Server.
+
+To override this behavior and use a persistent folder, add the following before you you execute `ews.run()`
+
+```js
+ews.tempDir = '/path/to/temp/folder';
+```
+
+# Constructing the ewsArgs JSON Object
+
+Take the example of "[FindItem](https://msdn.microsoft.com/en-us/library/office/aa566107.aspx)" that is referenced in the Microsoft EWS API Docs as follows:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
+               xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types">
+  <soap:Body>
+    <FindItem xmlns="http://schemas.microsoft.com/exchange/services/2006/messages"
+               xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types"
+              Traversal="Shallow">
+      <ItemShape>
+        <t:BaseShape>IdOnly</t:BaseShape>
+      </ItemShape>
+      <ParentFolderIds>
+        <t:DistinguishedFolderId Id="deleteditems"/>
+      </ParentFolderIds>
+    </FindItem>
+  </soap:Body>
+</soap:Envelope>
+```
+
+The equivalent JSON Request for node-ews (ewsArgs) would be:
+
+```js
+{
+  'attributes': {
+    'Traversal': 'Shallow'
+  },
+  'ItemShape': {
+    'BaseShape': 'IdOnly'
+  },
+  'ParentFolderIds' : {
+    'DistinguishedFolderId': {
+      'attributes': {
+        'Id': 'deleteditems'
       }
     }
-  },
-  headers: {
-    'http://schemas.microsoft.com/exchange/services/2006/types': [{
-      RequestServerVersion: {
-        attributes: {
-          Version: 'Exchange2010'
-        }
-      },
-      ExchangeImpersonation: {
-        ConnectingSID: {
-          SmtpAddress: '...'
-        }
-      }
-    }]
   }
-}, function(err, result) {});
-```
-
-#### Specifying XML processors
-You can specify the XML processors you want to use when parsing the response. If you are seeing what should be Date/Times having values like '00Z', disable the stripPrefix processor that is run by default on the XML value by specifying:
-```
-ews.processors: {
-  valueProcessors: null
 }
 ```
-Alternatively you can pass in an array of functions which will be merged with the default stripPrefix processor. Details can be found at the [node-xml2js](https://github.com/Leonidas-from-XIV/node-xml2js#processing-attribute-tag-names-and-values)
 
-#### Known Issues / Limits / TODOs:
-- Returned json requires a lot of parsing. Probably can be optimized to remove common parent elements to the EWS responses or dynamically filter based on query.
-- Outside of the example above, nothing has been tested (aka "It's production ready!")
-- Temp file cleanup logic needs to be validated to ensure file cleanup after process exit or object destruction
+It is important to note the structure of the request. Items such as "BaseShape" are children of their parent element. In this case it is "ItemShape". In regards "BaseShape" it is enclosed between an opening and closing tag so it is defined as a direct clid of "ItemShape".
+
+However, "DistinguishedFolderId" has no closing tag and you must specify an ID. Rather than a direct child object, you must use the JSON child object "attributes".
+
+**Alternatively you can create something like this to convert the EWS Soap Query to a SOAP JSON query:**
+
+```js
+var xml2js = require('xml2js');
+var when = require('when');
+var _ = require('lodash');
+
+var util = require('util');
+
+function convert(xml) {
+
+  var attrkey = 'attributes';
+
+  var parser = new xml2js.Parser({
+    attrkey: attrkey,
+    trim: true,
+    ignoreAttrs: false,
+    explicitRoot: false,
+    explicitCharkey: false,
+    explicitArray: false,
+    explicitChildren: false,
+    tagNameProcessors: [
+      function(tag) {
+        return tag.replace('t:', '');
+      }
+    ]
+  });
+
+  return when.promise((resolve, reject) => {
+    parser.parseString(xml, (err, result) => {
+      if(err) reject(err);
+      else {
+        var ewsFunction = _.keys(result['soap:Body'])[0];
+        var parsed = result['soap:Body'][ewsFunction];
+        parsed[attrkey] = _.omit(parsed[attrkey], ['xmlns', 'xmlns:t']);
+        if(_.isEmpty(parsed[attrkey])) parsed = _.omit(parsed, [attrkey]);
+        resolve(parsed);
+      }
+    });
+  });
+
+}
+
+var xml = '<?xml version="1.0" encoding="utf-8"?>' +
+  '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" ' +
+                 'xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types">' +
+    '<soap:Body>' +
+      '<FindItem xmlns="http://schemas.microsoft.com/exchange/services/2006/messages" ' +
+                'xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types" ' +
+                'Traversal="Shallow">' +
+        '<ItemShape>' +
+          '<t:BaseShape>IdOnly</t:BaseShape>' +
+        '</ItemShape>' +
+        '<ParentFolderIds>' +
+          '<t:DistinguishedFolderId Id="deleteditems"/>' +
+        '</ParentFolderIds>' +
+      '</FindItem>' +
+    '</soap:Body>' +
+  '</soap:Envelope>';
+
+convert(xml).then(json => {
+  console.log('ewsArgs = ' + util.inspect(json, false, null));
+});
+
+// console output ready for ewsArgs
+
+// ewsArgs = { attributes: { Traversal: 'Shallow' },
+//   ItemShape: { BaseShape: 'IdOnly' },
+//   ParentFolderIds: { DistinguishedFolderId: { attributes: { Id: 'deleteditems' } } } }
+```
