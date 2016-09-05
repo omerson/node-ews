@@ -1,5 +1,5 @@
 {
-  "name": "node-ews-noloop",
+  "name": "node-ews-noloop-new",
   "version": "2.1.3",
   "description": "A simple JSON wrapper for the Exchange Web Services (EWS) SOAP API",
   "main": "./index.js",
